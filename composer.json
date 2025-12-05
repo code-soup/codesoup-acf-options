@@ -1,0 +1,67 @@
+{
+	"name": "codesoup/acf-options",
+	"version": "1.0.0",
+	"description": "Manage ACF options using custom post types with instance key support for WordPress",
+	"homepage": "https://www.codesoup.co",
+	"type": "library",
+	"license": "GPL-3.0-or-later",
+	"support": {
+		"issues": "https://github.com/code-soup/acf-options/issues"
+	},
+	"authors": [
+		{
+			"name": "Code Soup",
+			"email": "hi@codesoup.co",
+			"homepage": "https://www.codesoup.co"
+		}
+	],
+	"keywords": [
+		"wordpress",
+		"acf",
+		"acf-pro",
+		"options",
+		"settings",
+		"custom-post-type",
+		"composer-package"
+	],
+	"autoload": {
+		"psr-4": {
+			"CodeSoup\\ACFOptions\\": "includes/"
+		}
+	},
+	"require": {
+		"php": ">=8.1.0"
+	},
+	"suggest": {
+		"advanced-custom-fields/advanced-custom-fields-pro": "Required for ACF location rules and field management"
+	},
+	"require-dev": {
+		"wp-coding-standards/wpcs": "*",
+		"phpcompatibility/phpcompatibility-wp": "*",
+		"dealerdirect/phpcodesniffer-composer-installer": "^0.7.0",
+		"php-parallel-lint/php-parallel-lint": "^1.3.1",
+		"php-parallel-lint/php-console-highlighter": "^0.5.0"
+	},
+	"config": {
+		"allow-plugins": {
+			"dealerdirect/phpcodesniffer-composer-installer": true
+		}
+	},
+	"scripts": {
+		"wpcs": "@php ./vendor/squizlabs/php_codesniffer/bin/phpcs --report=full",
+		"cbf": "@php ./vendor/squizlabs/php_codesniffer/bin/phpcbf --report=full",
+		"lint": "@php ./vendor/bin/parallel-lint . -e php --show-deprecated --exclude vendor --exclude .git"
+	},
+	"extra": {
+		"installer-paths": {
+			"vendor/{$name}": [
+				"vendor/package"
+			]
+		},
+		"scripts-description": {
+			"wpcs": "Analyze code against the WordPress coding standards with PHP_CodeSniffer",
+			"cbf": "Fix coding standards warnings/errors automatically with PHP Code Beautifier",
+			"lint": "Lint PHP files against parse errors"
+		}
+	}
+}

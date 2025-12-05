@@ -22,16 +22,13 @@ composer require codesoup/acf-options
 
 ### As WordPress Plugin from GitHub
 
-1. Download the plugin as a ZIP file from GitHub:
-   - Go to https://github.com/codesoup/acf-options
-   - Click the green "Code" button
-   - Select "Download ZIP"
+1. Download the plugin as a ZIP file from GitHub
 
-2. Extract the ZIP file and rename the folder to `codesoup-acf-options`
+2. Extract the ZIP file to your WordPress plugins directory
 
-3. Move the folder to your WordPress plugins directory:
+3. Activate the plugin
 
-4. Activate the plugin through the WordPress admin panel
+4. Add required create/register_page code to your functions.php
 
 
 ## Usage

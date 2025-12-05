@@ -14,9 +14,25 @@ In case you use custom capabilities make sure you create and assign capability t
 
 ## Installation
 
+### Via Composer
+
 ```bash
 composer require codesoup/acf-options
 ```
+
+### As WordPress Plugin from GitHub
+
+1. Download the plugin as a ZIP file from GitHub:
+   - Go to https://github.com/codesoup/acf-options
+   - Click the green "Code" button
+   - Select "Download ZIP"
+
+2. Extract the ZIP file and rename the folder to `codesoup-acf-options`
+
+3. Move the folder to your WordPress plugins directory:
+
+4. Activate the plugin through the WordPress admin panel
+
 
 ## Usage
 

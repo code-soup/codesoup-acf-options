@@ -529,7 +529,7 @@ class Manager {
 	 * @param int $post_id Post ID.
 	 * @return void
 	 */
-	public function save_options( int $post_id ): void {
+	public function save_options( $post_id ): void {
 		// Only process our post type.
 		if ( get_post_type( $post_id ) !== $this->config['post_type'] ) {
 			return;
@@ -591,7 +591,7 @@ class Manager {
 	 * @param string $page_id Page identifier.
 	 * @return array Options array.
 	 */
-	public function get_options( string $page_id ): array {
+	public function get_options( $page_id ): array {
 		$post_name = $this->get_post_name( $page_id );
 		$post_type = $this->config['post_type'];
 

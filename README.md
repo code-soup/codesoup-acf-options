@@ -3,6 +3,8 @@
 
 Composer package for managing WordPress options pages using ACF and custom post type. Data is stored and retrieved from  `post_content` field and does not use the wp_options table. Supports multiple instances and capability-based access control.
 
+This approach leverages native WordPress post locking to prevent concurrent edits and provides optionial revision history for all option changes.
+
 In case you use custom capabilities make sure you create and assign capability to Administrator role otherwise options page will not be visible/accessible. You can use plugin like [User Role Editor](https://wordpress.org/plugins/user-role-editor/) to manage custom capabilites and roles.
 
 

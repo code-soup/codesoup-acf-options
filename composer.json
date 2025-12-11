@@ -1,6 +1,5 @@
 {
 	"name": "codesoup/acf-options",
-	"version": "1.0.1",
 	"description": "Manage ACF options using custom post types with instance key support for WordPress",
 	"homepage": "https://www.codesoup.co",
 	"type": "library",

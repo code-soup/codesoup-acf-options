@@ -129,6 +129,174 @@ class Manager {
 	}
 
 	/**
+	 * Debug instance - get complete state information
+	 *
+	 * Returns configuration, registered pages, and current values for all pages.
+	 *
+	 * @param string $instance_key Instance identifier.
+	 * @return array Debug information or error.
+	 */
+	public static function debug( string $instance_key ): array {
+		$instance = self::get( $instance_key );
+
+		if ( ! $instance ) {
+			return array(
+				'success' => false,
+				'error'   => 'Instance not found',
+			);
+		}
+
+		$config = $instance->get_config();
+		$pages  = $instance->get_pages();
+
+		$debug_info = array(
+			'success'      => true,
+			'instance_key' => $instance_key,
+			'config'       => $config,
+			'pages'        => array(),
+		);
+
+		foreach ( $pages as $page ) {
+			$post_name = $config['prefix'] . $page->id;
+
+			$page_data = array(
+				'id'          => $page->id,
+				'title'       => $page->title,
+				'capability'  => $page->capability,
+				'description' => $page->description,
+				'post_name'   => $post_name,
+				'values'      => $instance->get_options( $page->id ),
+			);
+
+			$debug_info['pages'][] = $page_data;
+		}
+
+		return $debug_info;
+	}
+
+	/**
+	 * Migrate instance configuration
+	 *
+	 * Handles:
+	 * - Changing post_type or prefix (renames posts)
+	 * - Syncing capabilities from code to existing posts
+	 *
+	 * @param string $instance_key Instance identifier.
+	 * @param array  $old_config Old configuration with 'post_type' and 'prefix'.
+	 * @param array  $new_pages Array of new page definitions with updated capabilities.
+	 * @return array Migration results with counts.
+	 */
+	public static function migrate( string $instance_key, array $old_config, array $new_pages = array() ): array {
+		global $wpdb;
+
+		$instance = self::get( $instance_key );
+		if ( ! $instance ) {
+			return array(
+				'success' => false,
+				'error'   => 'Instance not found',
+			);
+		}
+
+		$new_config    = $instance->get_config();
+		$old_post_type = $old_config['post_type'] ?? null;
+		$old_prefix    = $old_config['prefix'] ?? null;
+		$new_post_type = $new_config['post_type'];
+		$new_prefix    = $new_config['prefix'];
+
+		$results = array(
+			'success'              => true,
+			'posts_updated'        => 0,
+			'post_type_changed'    => 0,
+			'prefix_changed'       => 0,
+			'capabilities_synced'  => 0,
+			'errors'               => array(),
+		);
+
+		// Get all posts with old post_type.
+		$posts = get_posts(
+			array(
+				'post_type'      => $old_post_type ?? $new_post_type,
+				'posts_per_page' => -1,
+				'post_status'    => 'any',
+			)
+		);
+
+		if ( empty( $posts ) ) {
+			$results['error'] = 'No posts found to migrate';
+			return $results;
+		}
+
+		// Build capability map from new pages.
+		$capability_map = array();
+		foreach ( $new_pages as $page_args ) {
+			if ( isset( $page_args['id'] ) && isset( $page_args['capability'] ) ) {
+				$capability_map[ $page_args['id'] ] = $page_args['capability'];
+			}
+		}
+
+		foreach ( $posts as $post ) {
+			$updated = false;
+			$post_id = $post->ID;
+
+			// Update post_type if changed.
+			if ( $old_post_type && $old_post_type !== $new_post_type ) {
+				set_post_type( $post_id, $new_post_type );
+				$results['post_type_changed']++;
+				$updated = true;
+			}
+
+			// Update post_name (prefix) if changed.
+			if ( $old_prefix && $old_prefix !== $new_prefix ) {
+				$old_name = $post->post_name;
+				if ( strpos( $old_name, $old_prefix ) === 0 ) {
+					$page_id  = substr( $old_name, strlen( $old_prefix ) );
+					$new_name = $new_prefix . $page_id;
+
+					wp_update_post(
+						array(
+							'ID'        => $post_id,
+							'post_name' => $new_name,
+						)
+					);
+					$results['prefix_changed']++;
+					$updated = true;
+
+					// Clear cache with old key.
+					$old_cache_key = 'options_' . $instance_key . '_' . $page_id;
+					wp_cache_delete( $old_cache_key, 'acf_options' );
+				}
+			}
+
+			// Sync capability if provided in new_pages.
+			if ( ! empty( $capability_map ) ) {
+				$post_name = get_post_field( 'post_name', $post_id );
+				$prefix    = $new_prefix;
+
+				if ( strpos( $post_name, $prefix ) === 0 ) {
+					$page_id = substr( $post_name, strlen( $prefix ) );
+
+					if ( isset( $capability_map[ $page_id ] ) ) {
+						$new_capability = $capability_map[ $page_id ];
+						$old_capability = get_post_meta( $post_id, '_acf_options_capability', true );
+
+						if ( $old_capability !== $new_capability ) {
+							update_post_meta( $post_id, '_acf_options_capability', $new_capability );
+							$results['capabilities_synced']++;
+							$updated = true;
+						}
+					}
+				}
+			}
+
+			if ( $updated ) {
+				$results['posts_updated']++;
+			}
+		}
+
+		return $results;
+	}
+
+	/**
 	 * Private constructor
 	 *
 	 * @param string $instance_key Unique instance identifier.
@@ -145,6 +313,7 @@ class Manager {
 				'menu_icon'     => 'dashicons-admin-generic',
 				'text_domain'   => 'codesoup-acf-options',
 				'menu_label'    => 'Codesoup ACF Options',
+				'revisions'     => false,
 			),
 			$config
 		);
@@ -192,6 +361,18 @@ class Manager {
 	}
 
 	/**
+	 * Register multiple options pages
+	 *
+	 * @param array $pages Array of page arguments.
+	 * @return void
+	 */
+	public function register_pages( array $pages ): void {
+		foreach ( $pages as $page_args ) {
+			$this->register_page( $page_args );
+		}
+	}
+
+	/**
 	 * Initialize the manager
 	 *
 	 * @return void
@@ -211,6 +392,13 @@ class Manager {
 		}
 
 		if ( ! is_admin() ) {
+			return;
+		}
+
+		// Check if ACF is available.
+		if ( ! function_exists( 'acf' ) ) {
+			add_action( 'admin_notices', array( $this, 'show_acf_missing_notice' ) );
+			$this->hooks_registered = true;
 			return;
 		}
 
@@ -239,6 +427,12 @@ class Manager {
 	 * @return void
 	 */
 	public function register_post_type(): void {
+		$supports = array( 'title' );
+
+		if ( $this->config['revisions'] ) {
+			$supports[] = 'revisions';
+		}
+
 		register_post_type(
 			$this->config['post_type'],
 			array(
@@ -255,7 +449,7 @@ class Manager {
 				'has_archive'         => false,
 				'hierarchical'        => false,
 				'menu_position'       => $this->config['menu_position'],
-				'supports'            => array( 'title' ),
+				'supports'            => $supports,
 				'show_in_rest'        => false,
 				'exclude_from_search' => true,
 				'capabilities'        => array(
@@ -381,6 +575,19 @@ class Manager {
 		}
 
 		$this->created_pages[ $page->id ] = $post_id;
+	}
+
+	/**
+	 * Show admin notice when ACF is missing
+	 *
+	 * @return void
+	 */
+	public function show_acf_missing_notice(): void {
+		printf(
+			'<div class="notice notice-error"><p><strong>%s:</strong> %s</p></div>',
+			esc_html__( 'ACF Options Manager', 'codesoup-acf-options' ),
+			esc_html__( 'Advanced Custom Fields plugin is required. Please install and activate ACF.', 'codesoup-acf-options' )
+		);
 	}
 
 	/**
@@ -540,6 +747,11 @@ class Manager {
 			return;
 		}
 
+		// Check if ACF is available.
+		if ( ! function_exists( 'get_fields' ) ) {
+			return;
+		}
+
 		// Get all ACF field values (already processed and saved by ACF).
 		$fields = get_fields( $post_id );
 
@@ -567,7 +779,11 @@ class Manager {
 					$result->get_error_message()
 				)
 			);
+			return;
 		}
+
+		// Invalidate cache after successful save.
+		$this->invalidate_cache( $post_id );
 	}
 
 	/**
@@ -587,29 +803,77 @@ class Manager {
 	 * Get options by page ID (instance method)
 	 *
 	 * Retrieves options from post_content (serialized array).
+	 * Uses object cache to avoid repeated database queries.
 	 *
 	 * @param string $page_id Page identifier.
 	 * @return array Options array.
 	 */
 	public function get_options( $page_id ): array {
+		$cache_key   = $this->get_cache_key( $page_id );
+		$cache_group = 'acf_options';
+
+		// Try to get from cache first.
+		$cached = wp_cache_get( $cache_key, $cache_group );
+		if ( $cached !== false ) {
+			return $cached;
+		}
+
 		$post_name = $this->get_post_name( $page_id );
 		$post_type = $this->config['post_type'];
 
 		$post = get_page_by_path( $post_name, OBJECT, $post_type );
 
 		if ( ! $post ) {
+			// Cache empty result to avoid repeated lookups.
+			wp_cache_set( $cache_key, array(), $cache_group );
 			return array();
 		}
 
 		$content = $post->post_content;
 		if ( empty( $content ) ) {
+			// Cache empty result.
+			wp_cache_set( $cache_key, array(), $cache_group );
 			return array();
 		}
 
 		// Use maybe_unserialize for safety.
 		$options = maybe_unserialize( $content );
+		$options = is_array( $options ) ? $options : array();
 
-		return is_array( $options ) ? $options : array();
+		// Cache the result.
+		wp_cache_set( $cache_key, $options, $cache_group );
+
+		return $options;
+	}
+
+	/**
+	 * Get single option by page ID and field name
+	 *
+	 * Retrieves single field value from postmeta using ACF's get_field().
+	 *
+	 * @param string $page_id Page identifier.
+	 * @param string $field_name ACF field name.
+	 * @param mixed  $default Default value if field not found.
+	 * @return mixed Field value or default.
+	 */
+	public function get_option( string $page_id, string $field_name, $default = null ) {
+		// Check if ACF is available.
+		if ( ! function_exists( 'get_field' ) ) {
+			return $default;
+		}
+
+		$post_name = $this->get_post_name( $page_id );
+		$post_type = $this->config['post_type'];
+
+		$post = get_page_by_path( $post_name, OBJECT, $post_type );
+
+		if ( ! $post ) {
+			return $default;
+		}
+
+		$value = get_field( $field_name, $post->ID );
+
+		return $value !== false ? $value : $default;
 	}
 
 	/**
@@ -620,6 +884,35 @@ class Manager {
 	 */
 	private function get_post_name( string $page_id ): string {
 		return $this->config['prefix'] . $page_id;
+	}
+
+	/**
+	 * Get cache key for a page
+	 *
+	 * @param string $page_id Page identifier.
+	 * @return string
+	 */
+	private function get_cache_key( string $page_id ): string {
+		return 'options_' . $this->instance_key . '_' . $page_id;
+	}
+
+	/**
+	 * Invalidate cache for a page
+	 *
+	 * @param int $post_id Post ID.
+	 * @return void
+	 */
+	private function invalidate_cache( int $post_id ): void {
+		$post      = get_post( $post_id );
+		$post_name = $post->post_name;
+		$prefix    = $this->config['prefix'];
+
+		// Extract page_id from post_name.
+		if ( strpos( $post_name, $prefix ) === 0 ) {
+			$page_id   = substr( $post_name, strlen( $prefix ) );
+			$cache_key = $this->get_cache_key( $page_id );
+			wp_cache_delete( $cache_key, 'acf_options' );
+		}
 	}
 
 	/**

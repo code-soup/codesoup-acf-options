@@ -1,9 +1,10 @@
 {
 	"name": "codesoup/acf-options",
-	"description": "Manage ACF options using custom post types with instance key support for WordPress",
+	"description": "DEPRECATED: Use codesoup/options instead. This package is no longer maintained.",
 	"homepage": "https://www.codesoup.co",
 	"type": "library",
 	"license": "GPL-3.0-or-later",
+	"abandoned": "codesoup/options",
 	"support": {
 		"issues": "https://github.com/code-soup/acf-options/issues"
 	},
